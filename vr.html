@@ -5,19 +5,19 @@
 
 <script>
 var c, ctx;
-var framerate = 3;
+var framerate = 30;
 var debug = 0;
 
-var cellw = 10;
+var cellw = 5;
 var draw_dist = cellw * 100; //TODO should be map_side * cellw * 1.5
-var ray_step = 0.5;
+var ray_step = 0.2;
 
 var px = cellw*3, py = cellw*4, pa = -Math.PI / 2; //pa = player angle
-var fov = Math.PI / 4;
+var fov = Math.PI / 2;
 var bkg_grad;
 
 var kb_left = 0, kb_right = 0, kb_up = 0, kb_down = 0, kb_a = 0, kb_z = 0;
-var rot_step = Math.PI / 90;
+var rot_step = Math.PI / 45;
 var mv_step = 0.5;
 
 var mm_scale = 5;
@@ -27,14 +27,14 @@ var mm_scale = 5;
 var map = [
 	//"0123456789"
 	"##########", //0
-	"#........#", //1
+	"##.......#", //1
 	"#..#.....#", //2
-	"#........#", //3
+	"#......###", //3
 	"#........#", //4
-	"#....#...#", //5
+	"#...##...#", //5
 	"#........#", //6
-	"#.#......#", //7
-	"#........#", //8
+	"#..####..#", //7
+	"#.....#..#", //8
 	"##########"  //9
 ];
 
@@ -99,13 +99,23 @@ function handle_kb() {
 		pa += rot_step;
 	
 	if(kb_up) {
-		px += mv_step * Math.cos(pa);
-		py += mv_step * Math.sin(pa);
+		var npx = px + mv_step * Math.cos(pa);
+		var npy = py + mv_step * Math.sin(pa);
+		
+		if(!detect_collision(npx, npy)) {
+			px = npx;
+			py = npy;
+		}
 	}
 	
 	if(kb_down) {
-		px -= mv_step * Math.cos(pa);
-		py -= mv_step * Math.sin(pa);
+		var npx = px - mv_step * Math.cos(pa);
+		var npy = py - mv_step * Math.sin(pa);
+		
+		if(!detect_collision(npx, npy)) {
+			px = npx;
+			py = npy;
+		}
 	}
 }
 
