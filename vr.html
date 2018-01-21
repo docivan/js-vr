@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>VR testing</title>
+
+<script>
+var c, ctx;
+var framerate = 30;
+var debug = 0;
+var pxr = 5; //pixel resolution
+
+var cellw = 10;
+var draw_dist = cellw * 10;
+var ray_step = 1;
+
+var px = cellw*5, py = cellw*6, pa = Math.PI / 2; //pa = player angle
+var fov = Math.PI / 4;
+var ceil_grad;
+var floor_grad;
+
+var map = [
+	//"0123456789"
+	"##########", //0
+	"#........#", //1
+	"#..#.....#", //2
+	"#........#", //3
+	"#........#", //4
+	"#....#...#", //5
+	"#........#", //6
+	"#.#......#", //7
+	"#........#", //8
+	"##########"  //9
+];
+
+function put_pixel(x, y) {
+	ctx.fillRect(x, y, pxw, pwh);
+}
+
+function init() {
+	c = document.getElementById("myCanvas");
+	ctx = c.getContext("2d");
+	
+	window.setInterval(function(){
+		update();
+	}, 1000/framerate);
+}
+
+function detect_collision(x, y) {
+	var arr_x = Math.floor(x / cellw);
+	var arr_y = Math.floor(y / cellw);
+	
+	if(arr_x <0 || arr_y <0) //out of bounds
+		return 1;
+	
+	if(map[parseInt(arr_y)][parseInt(arr_x)] == "#")
+		return 1; // hit
+	else
+		return 0;
+}
+
+function update() {
+	ctx.fillStyle="#ffffff";
+	ctx.fillRect(0,0,c.width,c.height);
+	/*
+	//draw floor and ceiling
+	ctx.fillStyle="#ff0000";
+	ctx.fillRect(90,90,120,120);
+	ctx.fillRect(370,90,120,120);
+	*/
+	
+	pa += Math.PI / 180;
+	
+	for(var i = 0; i<c.width; i++) {
+		var ray_a = (pa + fov / 2) + (i/c.width)*fov;
+		
+		var dist = 0;
+		var vx = Math.sin(ray_a);
+		var vy = Math.cos(ray_a);
+		
+		while (dist < draw_dist) {
+			dist += ray_step;
+			
+			var testx = px + vx*dist;
+			var testy = py + vy*dist;
+			
+			if( detect_collision(testx, testy) )
+				break;
+		}
+		
+		var ceil_y = c.height / 2 - c.height / dist; //if dist = 1 => negative
+		if(ceil_y < 0)
+			ceil_y=0;
+		
+		var floor_y = c.height - ceil_y;
+		
+		//TODO shading!
+		ctx.fillStyle="#ff0000";
+		ctx.fillRect(i, ceil_y, 1, floor_y-ceil_y);
+	}
+	
+	var test="#...#";
+	if(map[1][3]=="#") ;
+	
+	if(debug) {
+		//draw grid
+		ctx.fillStyle="#555555";
+		
+		for(var i=pxr; i<c.width; i+=pxr)
+			ctx.fillRect(i,0,1,c.height);
+		
+		for(var i=pxr; i<c.height; i+=pxr)
+			ctx.fillRect(0,i,c.width,1);
+		
+	}
+}
+
+</script> 
+
+</head>
+
+<body onload="init()">
+<canvas id="myCanvas" width="400" height="400" style="border:1px solid #d3d3d3;">
+Your browser does not support the HTML5 canvas tag.</canvas>
+</body>
+</html>
