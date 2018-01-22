@@ -161,17 +161,43 @@ function vlen(x1, y1, x2, y2) {
 	return Math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2));
 }
 
+function normalize_radians(angle) {
+	return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function compare_radians(r1, r2) {
+	//console.log(r1, normalize_radians(r1)*(180/Math.PI), normalize_radians(r2)*(180/Math.PI), normalize_radians(r1) * normalize_radians(r2) > 0);
+	//console.log(normalize_radians(r2)*(180/Math.PI));
+	//console.log(normalize_radians(r1)*(180/Math.PI));
+	return 1;
+	//return normalize_radians(r1) * normalize_radians(r2) > 0;
+}
+
 function calc_dist(cell_x, cell_y, ray_a) {
+	var exact_dist=Number.MAX_SAFE_INTEGER, ndist = 0.0;
+	
 	//check if we are facing away from this cell
 	//NB! ideally should be done for every intersection
 	
 	/*var ccx = (cell_x + 0.5) * cellw;
-	var ccx = (cell_y + 0.5) * cellw;*/
+	var ccy = (cell_y + 0.5) * cellw;
 	
-	var exact_dist=Number.MAX_SAFE_INTEGER, ndist = 0.0;
+	var cvx = ccx - px;
+	var cvy = ccy - py;
 	
 	var vx = Math.cos(ray_a);
-	var vy = Math.sin(ray_a); 
+	var vy = Math.sin(ray_a);
+	
+	var ux = cvx / vlen(ccx, ccy, px, py);
+	var uy = cvy / vlen(ccx, ccy, px, py);
+	
+	if()*/
+	
+	
+	//var theta = Math.atan((ccy-py)/(ccx-px));
+	
+	//if(Math.abs(normalize_radians(theta) - normalize_radians(ray_a))>(Math.PI))
+		//return exact_dist;
 	
 	var k = Math.tan(ray_a);
 	var b = py - k * px;
@@ -183,23 +209,32 @@ function calc_dist(cell_x, cell_y, ray_a) {
 	var ptbx = (cell_x+1) * cellw;
 	var ptby = (cell_y+1) * cellw;
 	
+	//visible ray in front of player: [px, py] => [px + vx*draw_dist, py + vy*draw_dist]
+	var ux1 = px;
+	var uy1 = py;
+	var ux2 = px + Math.cos(ray_a)*draw_dist;
+	var uy2 = py + Math.sin(ray_a)*draw_dist;
+	var tmp;
+	
+	if(ux1>ux2) {tmp=ux1; ux1=ux2; ux2=tmp;}
+	if(uy1>uy2) {tmp=uy1; uy1=uy2; uy2=tmp;}
+	
+	
 	//bottom
 	var fx2 = (ptby - b) / k;
-	if(fx2>=ptax && fx2<=ptbx) {
+	//var theta = Math.atan((ptby-py)/(fx2-px));
+	if(/*compare_radians(theta, ray_a) && */
+		fx2>=ptax && fx2<=ptbx && fx2>ux1 && fx2<ux2 && ptby>uy1 && ptby<uy2) {
 		ndist = Math.sqrt((px-fx2)*(px-fx2) + (py-ptby)*(py-ptby));
 		
-		var ux = (fx2 - px) / ndist;
-		var uy = (ptby - py) / ndist;
-		
-		var sum = vx + ux + vy + uy;
-		
-		if(sum != 0 && ndist < exact_dist)
+		if(ndist < exact_dist)
 			exact_dist = ndist;
 	}
 	
 	//left
 	var fy1 = k*ptax + b;
-	if(fy1>=ptay && fy1<=ptby) {
+	var theta = Math.atan((fy1-py)/(ptax-px));
+	if(/*compare_radians(theta, ray_a) && */fy1>=ptay && fy1<=ptby  && ptax>ux1 && ptax<ux2 && fy1>uy1 && fy1<uy2) {
 		ndist = Math.sqrt((px-ptax)*(px-ptax) + (py-fy1)*(py-fy1));
 		
 		if(ndist<exact_dist)
@@ -208,16 +243,18 @@ function calc_dist(cell_x, cell_y, ray_a) {
 	
 	//top
 	var fx1 = (ptay - b) / k;
-	if(fx1>=ptax && fx1<=ptbx) {
+	var theta = Math.atan((ptay-py)/(fx1-px));
+	if(/*compare_radians(theta, ray_a) && */fx1>=ptax && fx1<=ptbx  && fx1>ux1 && fx1<ux2 && ptay>uy1 && ptay<uy2) {
 		ndist = Math.sqrt((px-fx1)*(px-fx1) + (py-ptay)*(py-ptay));
-		
+				
 		if(ndist<exact_dist)
 			exact_dist = ndist;
 	}
 	
 	//right
 	var fy2 = k*ptbx + b;
-	if(fy2>=ptay && fy2<=ptby) {
+	var theta = Math.atan((fy2-py)/(ptbx-px));
+	if(compare_radians(theta, ray_a) && fy2>=ptay && fy2<=ptby  && ptbx>ux1 && ptbx<ux2 && fy2>uy1 && fy2<uy2) {
 		ndist = Math.sqrt((px-ptbx)*(px-ptbx) + (py-fy2)*(py-fy2));
 		
 		if(ndist<exact_dist)
