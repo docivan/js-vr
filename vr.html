@@ -6,7 +6,7 @@
 <script>
 var c, ctx;
 var framerate = 30;
-var debug = 0;
+var debug = 1;
 
 var cellw = 5;
 var draw_dist = cellw * 100; //TODO should be map_side * cellw * 1.5
@@ -42,6 +42,9 @@ var map = [
 function init() {
 	c = document.getElementById("myCanvas");
 	ctx = c.getContext("2d");
+	
+	if(debug)
+		c.style="border:1px solid #d3d3d3;";
 	
 	bkg_grad=ctx.createLinearGradient(0,0,0,c.height);
 	bkg_grad.addColorStop(0,"black");
@@ -213,7 +216,42 @@ function calc_dist(cell_x, cell_y, ray_a) {
 			exact_dist = ndist;
 	}
 	
-	return exact_dist;
+	return {texture_x: 0, dist: exact_dist};
+}
+
+//checker pattern
+var shader_checkers = 6;
+function shader(disp_x, texture_x, height, dist) {
+	//attenueate colors according to distance
+	//max = #0000ff
+	//var col1 = //TODO - copy
+	var col_hi = "#0000" + col1;
+
+	//max = #7d7dff (aka 125,125,255)
+	//var col2 = //TODO - copy
+	var col_lo = "#" + col2 + col2 + col1;
+
+	//which col to start?
+	var col_sel = 0;
+	if(Math.floor(texture_x / ( cell_w / shader_checkers)) % 2 == 0 ) col_sel = 1;
+
+	//render
+	for(var i=0; i<shader_checkers; i++) {
+		var col = col_hi;
+		if(col_sel)  col = col_lo;
+
+		//draw
+		ctx.setFillStyle(col);
+		ctx.fillRect(disp_x, (c.height - height) / 2, 1, height / shader_checkers)
+
+		//swap colors
+		col_sel = !col_sel;
+	}
+}
+
+function hello() {
+	var fake = 1;
+	return {lol: 0, other: fake};
 }
 
 function update() {
@@ -225,36 +263,23 @@ function update() {
 	for(var i = 0; i<c.width; i++) {
 		var ray_a = (pa - fov / 2) + (i/c.width)*fov;
 		
-		var dist = 0;
-		
-		if(collision_method == 1) {
-			var dist = Number.MAX_SAFE_INTEGER;
-			
-			for(var y=0; y<10; y++)
-				for(var x=0; x<10; x++)
-					if(map[y][x] == "#") {
-						var ndist = calc_dist(x, y, ray_a);
-						
-						if(ndist < dist)
-							dist = ndist;
+		var closest_collision = {texture_x: 0, dist: Number.MAX_SAFE_INTEGER};
+				
+		for(var y=0; y<10; y++)
+			for(var x=0; x<10; x++)
+				if(map[y][x] == "#") {
+					var collision_info = calc_dist(x, y, ray_a);
+
+					if(collision_info.dist < closest_collision.dist) {
+						closest_collision.dist = collision_info.dist;
+						closest_collision.texture_x = collision_info.texture_x;
 					}
-		}
-		else {
-			var vx = Math.cos(ray_a);
-			var vy = Math.sin(ray_a);
+				}
 		
-			while (dist < draw_dist) {
-				dist += ray_step;
-			
-				var testx = px + vx*dist;
-				var testy = py + vy*dist;
-			
-				if( detect_collision(testx, testy) )
-					break;
-			}
-		}
+		height = 2 * c.height / closest_collision.dist;
+		shader(x, closest_collision.texture_x, height, closest_collision.dist);
 		
-		var ceil_y = c.height / 2 - c.height / dist; //if dist = 1 => negative
+		var ceil_y = c.height / 2 - c.height / closest_collision.dist; //if dist = 1 => negative
 		if(ceil_y < 0)
 			ceil_y=0;
 		
@@ -277,8 +302,8 @@ function update() {
 
 </head>
 
-<body onload="init()">
-<canvas id="myCanvas" width="400" height="400" style="border:1px solid #d3d3d3;">
+<body onload="init()" style="background-color:#000000;">
+<canvas id="myCanvas" width="400" height="400" >
 Your browser does not support the HTML5 canvas tag.</canvas>
 </body>
 </html>
