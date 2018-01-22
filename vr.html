@@ -10,9 +10,8 @@ var debug = 0;
 
 var cellw = 5;
 var draw_dist = cellw * 100; //TODO should be map_side * cellw * 1.5
-var ray_step = 1;
-var exact_coll = 0;
-var coll_cell_x, coll_cell_y;
+var ray_step = 0.2;
+var collision_method = 1; //0 - ray step; 1 - exact
 
 var px = cellw*3, py = cellw*4, pa = -Math.PI / 2; //pa = player angle
 var fov = Math.PI / 2;
@@ -48,6 +47,8 @@ function init() {
 	bkg_grad.addColorStop(0,"black");
 	bkg_grad.addColorStop(0.5,"white");
 	bkg_grad.addColorStop(1,"black");
+	
+	//TODO compile edges!
 	
 	window.setInterval(function(){
 		update();
@@ -156,66 +157,72 @@ function draw_minimap () {
 	ctx.fillRect(mm_px - mm_scale/4, mm_py - mm_scale/4, mm_scale/2, mm_scale/2);
 }
 
-function calc_dist(ray_a) {
-	var exact_dist=99999, cur_dist = 0.0;
+function vlen(x1, y1, x2, y2) {
+	return Math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2));
+}
+
+function calc_dist(cell_x, cell_y, ray_a) {
+	//check if we are facing away from this cell
+	//NB! ideally should be done for every intersection
 	
-	/*px = 15;
-	py = 15;
-	ray_a = - Math.PI / 3;*/
+	/*var ccx = (cell_x + 0.5) * cellw;
+	var ccx = (cell_y + 0.5) * cellw;*/
+	
+	var exact_dist=Number.MAX_SAFE_INTEGER, ndist = 0.0;
+	
+	var vx = Math.cos(ray_a);
+	var vy = Math.sin(ray_a); 
 	
 	var k = Math.tan(ray_a);
 	var b = py - k * px;
 	
 	/* a .
 	   . b */
-	var ptax = coll_cell_x * cellw;
-	var ptay = coll_cell_y * cellw;
-	var ptbx = (coll_cell_x+1) * cellw;
-	var ptby = (coll_cell_y+1) * cellw;
-	/*var ptax = 10;
-	var ptay = 0;
-	var ptbx = 20;
-	var ptby = 10;*/
+	var ptax = cell_x * cellw;
+	var ptay = cell_y * cellw;
+	var ptbx = (cell_x+1) * cellw;
+	var ptby = (cell_y+1) * cellw;
 	
 	//bottom
 	var fx2 = (ptby - b) / k;
 	if(fx2>=ptax && fx2<=ptbx) {
-		cur_dist = Math.sqrt((px-fx2)*(px-fx2) + (py-ptby)*(py-ptby));
+		ndist = Math.sqrt((px-fx2)*(px-fx2) + (py-ptby)*(py-ptby));
 		
-		if(cur_dist < exact_dist)
-			exact_dist = cur_dist;
+		var ux = (fx2 - px) / ndist;
+		var uy = (ptby - py) / ndist;
+		
+		var sum = vx + ux + vy + uy;
+		
+		if(sum != 0 && ndist < exact_dist)
+			exact_dist = ndist;
 	}
-	
-	//console.log(k, b, fx2, cur_dist);
 	
 	//left
 	var fy1 = k*ptax + b;
 	if(fy1>=ptay && fy1<=ptby) {
-		cur_dist = Math.sqrt((px-ptax)*(px-ptax) + (py-fy1)*(py-fy1));
+		ndist = Math.sqrt((px-ptax)*(px-ptax) + (py-fy1)*(py-fy1));
 		
-		if(cur_dist<exact_dist)
-			exact_dist = cur_dist;
+		if(ndist<exact_dist)
+			exact_dist = ndist;
 	}
 	
 	//top
 	var fx1 = (ptay - b) / k;
 	if(fx1>=ptax && fx1<=ptbx) {
-		cur_dist = Math.sqrt((px-fx1)*(px-fx1) + (py-ptay)*(py-ptay));
+		ndist = Math.sqrt((px-fx1)*(px-fx1) + (py-ptay)*(py-ptay));
 		
-		if(cur_dist<exact_dist)
-			exact_dist = cur_dist;
+		if(ndist<exact_dist)
+			exact_dist = ndist;
 	}
 	
 	//right
 	var fy2 = k*ptbx + b;
 	if(fy2>=ptay && fy2<=ptby) {
-		cur_dist = Math.sqrt((px-ptbx)*(px-ptbx) + (py-fy2)*(py-fy2));
+		ndist = Math.sqrt((px-ptbx)*(px-ptbx) + (py-fy2)*(py-fy2));
 		
-		if(cur_dist<exact_dist)
-			exact_dist = cur_dist;
+		if(ndist<exact_dist)
+			exact_dist = ndist;
 	}
-	
-	//console.log(exact_dist);
 	
 	return exact_dist;
 }
@@ -230,20 +237,31 @@ function update() {
 		var ray_a = (pa - fov / 2) + (i/c.width)*fov;
 		
 		var dist = 0;
-		var vx = Math.cos(ray_a);
-		var vy = Math.sin(ray_a);
 		
-		while (dist < draw_dist) {
-			dist += ray_step;
+		if(collision_method == 1) {
+			var dist = Number.MAX_SAFE_INTEGER;
 			
-			var testx = px + vx*dist;
-			var testy = py + vy*dist;
+			for(var y=0; y<10; y++)
+				for(var x=0; x<10; x++)
+					if(map[y][x] == "#") {
+						var ndist = calc_dist(x, y, ray_a);
+						
+						if(ndist < dist)
+							dist = ndist;
+					}
+		}
+		else {
+			var vx = Math.cos(ray_a);
+			var vy = Math.sin(ray_a);
+		
+			while (dist < draw_dist) {
+				dist += ray_step;
 			
-			if( detect_collision(testx, testy) ) {
-				if(exact_coll)
-					dist = calc_dist(ray_a);
-				
-				break;
+				var testx = px + vx*dist;
+				var testy = py + vy*dist;
+			
+				if( detect_collision(testx, testy) )
+					break;
 			}
 		}
 		
