@@ -6,9 +6,12 @@
 <script>
 var c, ctx;
 var framerate = 30;
-var debug = 1;
+var debug = 0;
 
-var auto_spin_mode = 0;
+var fps = -1;
+var frame_counter = 0;
+
+var auto_spin_mode = 1;
 var shader_checkers = 6;
 var cellw = 5;
 var draw_dist = cellw * 100; //TODO should be map_side * cellw * 1.5
@@ -58,6 +61,10 @@ function init() {
 	window.setInterval(function(){
 		update();
 	}, 1000/framerate);
+	
+	window.setInterval(function(){
+		update_fps_counter();
+	}, 1000);
 	
 	document.addEventListener('keydown', function(event) {
 		switch(event.keyCode) {
@@ -263,8 +270,8 @@ function shader(disp_x, texture_x, height) {
 }
 
 function render_viewport(disp_x, disp_w, vpx, vpy) {
-	for(var i = 0; i<c.width; i++) {
-		var ray_a = (pa - fov / 2) + (i/c.width)*fov;
+	for(var i = 0; i<disp_w; i++) {
+		var ray_a = (pa - fov / 2) + (i/disp_w)*fov;
 		
 		var closest_collision = {texture_x: 0, dist: Number.MAX_SAFE_INTEGER};
 				
@@ -284,10 +291,15 @@ function render_viewport(disp_x, disp_w, vpx, vpy) {
 		if(height > c.height)
 			height = c.height;
 		
-		shader(i, closest_collision.texture_x, height);
+		shader(disp_x + i, closest_collision.texture_x, height);
 	}
 	
 	draw_minimap();
+	
+	//draw fps counter
+	ctx.font = "10px monospace";
+	ctx.fillStyle = "#ff0000"
+	ctx.fillText(fps.toString() + "fps", 5, 590);
 }
 
 function update() {
@@ -299,10 +311,16 @@ function update() {
 	ctx.fillStyle=bkg_grad;
 	ctx.fillRect(0,0,c.width,c.height);
 	
-	render_viewport(0);
-	//render_viewport(600);
+	render_viewport(0, 600, px, py);
+	render_viewport(600, 600, px, py);
+	
+	frame_counter++;
 }
 
+function update_fps_counter() {
+	fps = frame_counter;
+	frame_counter = 0;
+}
 </script> 
 
 </head>
