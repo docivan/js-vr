@@ -224,34 +224,31 @@ var shader_checkers = 6;
 function shader(disp_x, texture_x, height, dist) {
 	//attenueate colors according to distance
 	//max = #0000ff
-	//var col1 = //TODO - copy
+	var col1 = parseInt(255 - 255 * height/c.height).toString(16);
+	if(col1.length < 2) col1 = "0" + col1;
 	var col_hi = "#0000" + col1;
 
 	//max = #7d7dff (aka 125,125,255)
-	//var col2 = //TODO - copy
+	var col2 = parseInt(125 - 125 * height/c.height).toString(16);
+	if(col2.length < 2) col2 = "0" + col2;
 	var col_lo = "#" + col2 + col2 + col1;
-
+	
 	//which col to start?
 	var col_sel = 0;
-	if(Math.floor(texture_x / ( cell_w / shader_checkers)) % 2 == 0 ) col_sel = 1;
+	if(Math.floor(texture_x / ( cellw / shader_checkers)) % 2 == 0 ) col_sel = 1;
 
 	//render
 	for(var i=0; i<shader_checkers; i++) {
 		var col = col_hi;
-		if(col_sel)  col = col_lo;
+		if(col_sel) col = col_lo;
 
 		//draw
-		ctx.setFillStyle(col);
-		ctx.fillRect(disp_x, (c.height - height) / 2, 1, height / shader_checkers)
+		ctx.fillStyle=col;
+		ctx.fillRect(disp_x, (c.height - height) / 2 + i * height / shader_checkers, 1, height / shader_checkers)
 
 		//swap colors
 		col_sel = !col_sel;
 	}
-}
-
-function hello() {
-	var fake = 1;
-	return {lol: 0, other: fake};
 }
 
 function update() {
@@ -277,9 +274,9 @@ function update() {
 				}
 		
 		height = 2 * c.height / closest_collision.dist;
-		shader(x, closest_collision.texture_x, height, closest_collision.dist);
+		shader(i, closest_collision.texture_x, height, closest_collision.dist);
 		
-		var ceil_y = c.height / 2 - c.height / closest_collision.dist; //if dist = 1 => negative
+		/*var ceil_y = c.height / 2 - c.height / closest_collision.dist; //if dist = 1 => negative
 		if(ceil_y < 0)
 			ceil_y=0;
 		
@@ -289,7 +286,7 @@ function update() {
 			col = "0" + col;
 		
 		ctx.fillStyle="#0000" + col;
-		ctx.fillRect(i, ceil_y, 1, floor_y-ceil_y);
+		ctx.fillRect(i, ceil_y, 1, floor_y-ceil_y);*/
 		
 		//if(i == 0)
 			//console.log("#0000" + col + " : " + ceil_y.toString() + " : " + (floor_y - ceil_y).toString());
