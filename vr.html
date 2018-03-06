@@ -4,39 +4,15 @@
 <title>VR testing</title>
 
 <script>
-var c, ctx;
-var framerate = 30;
-var debug = 0;
 
-var fps = -1;
-var frame_counter = 0;
-
-var auto_spin_mode = 1;
-var shader_checkers = 6;
-var cellw = 5;
-var draw_dist = cellw * 100; //TODO should be map_side * cellw * 1.5
-var ray_step = 0.2;
-var collision_method = 1; //0 - ray step; 1 - exact
-
-var px = cellw*3, py = cellw*4, pa = -Math.PI / 2; //pa = player angle
-var fov = Math.PI / 2;
-var bkg_grad;
-
-var kb_left = 0, kb_right = 0, kb_up = 0, kb_down = 0, kb_a = 0, kb_z = 0;
-var rot_step = Math.PI / 45;
-var mv_step = 0.5;
-
-var mm_scale = 5;
-
-//TODO define map size!
-
-var map = [
+//map
+const map = [
 	//"0123456789"
 	"##########", //0
 	"##.......#", //1
 	"#..#.....#", //2
 	"#......###", //3
-	"#........#", //4
+	"#..A.....#", //4
 	"#...##...#", //5
 	"#........#", //6
 	"#..####..#", //7
@@ -44,22 +20,89 @@ var map = [
 	"##########"  //9
 ];
 
+//internal, configurable
+const framerate = 30;
+const debug = 0;
+const shader_checker_subdiv = 6;
+const cell_sz = 5;
+const rotation_speed = Math.PI / 45;
+const movement_step = 0.5;
+const minimap_sz = 5;
+
+
+//internals, non-configurable
+var __canvas, __canvas_context;
+var __canvas_buffer, __canvas_buffer_context;
+var __fps = -1;
+var __frame_counter = 0;
+var __demo_mode = 1;
+var __vr_mode = 1;
+var __pupil_dist = 1;
+const __pupil_dist_adjust_speed = 0.1;
+
+const __map_w = map[0].length;
+const __map_h = map.length;
+
+var __fov = Math.PI / 2;
+const __draw_dist = Math.sqrt(__map_w*__map_w + __map_h*__map_h) * cell_sz * 1.01;
+
+var __player_x = 0;
+var __player_y = 0;
+var __player_angle = 0;
+
+var __bkg_grad;
+
+//kb button states
+var __kb_left = 0;
+var __kb_right = 0;
+var __kb_up = 0;
+var __kb_down = 0;
+var __kb_a = 0;
+var __kb_z = 0;
+var __kb_s = 0;
+var __kb_x = 0;
+
+const MAX_INT = Number.MAX_SAFE_INTEGER;
+
 function init() {
-	c = document.getElementById("myCanvas");
-	ctx = c.getContext("2d");
+	__canvas = document.getElementById("myCanvas");
+	__canvas_context = __canvas.getContext("2d");
+	
+	__canvas_buffer = document.createElement('canvas');
+	__canvas_buffer.width = __canvas.width;
+	__canvas_buffer.height = __canvas.height;
+	__canvas_buffer_context = __canvas_buffer.getContext("2d");
 	
 	if(debug)
-		c.style="border:1px solid #d3d3d3;";
+		__canvas_buffer.style="border:1px solid #d3d3d3;";
 	
-	bkg_grad=ctx.createLinearGradient(0,0,0,c.height);
-	bkg_grad.addColorStop(0,"black");
-	bkg_grad.addColorStop(0.5,"white");
-	bkg_grad.addColorStop(1,"black");
+	__bkg_grad=__canvas_buffer_context.createLinearGradient(0,0,0,__canvas_buffer.height);
+	__bkg_grad.addColorStop(0,"black");
+	__bkg_grad.addColorStop(0.5,"white");
+	__bkg_grad.addColorStop(1,"black");
+	
+	for(var y=0; y<__map_h; y++)
+		for(var x=0; x<__map_w; x++)
+			if(map[y][x] == ">" || map[y][x] == "<" || map[y][x] == "A" || map[y][x] == "V") {
+				if(map[y][x] == ">")
+					__player_angle = 0;
+				if(map[y][x] == "<")
+					__player_angle = Math.PI;
+				if(map[y][x] == "A")
+					__player_angle = -Math.PI / 2;
+				if(map[y][x] == "V")
+					__player_angle = Math.PI / 2;
+				
+				__player_x = cell_sz * x + cell_sz/2;
+				__player_y = cell_sz * y + cell_sz/2;
+			}
 	
 	//TODO compile edges!
+	//...
+	//edge lookup list
 	
 	window.setInterval(function(){
-		update();
+		main_loop();
 	}, 1000/framerate);
 	
 	window.setInterval(function(){
@@ -68,31 +111,42 @@ function init() {
 	
 	document.addEventListener('keydown', function(event) {
 		switch(event.keyCode) {
-			case 37: kb_left = 1; break;
-			case 38: kb_up = 1; break;
-			case 39: kb_right = 1; break;
-			case 40: kb_down = 1; break;
-			case 65: kb_a = 1; break; //fov up
-			case 90: kb_z = 1; break; //fov dwn
-			case 81: auto_spin_mode = !auto_spin_mode; break; //key Q
+			case 37: __kb_left = 1; break;
+			case 38: __kb_up = 1; break;
+			case 39: __kb_right = 1; break;
+			case 40: __kb_down = 1; break;
+			
+			case 87: __vr_mode = !__vr_mode; break; //key W
+			case 83: __kb_s = 1; break; //key S: pupil_distance up
+			case 88: __kb_x = 1; break; //key X: pupil_distance dwn
+			//TODO pupil distance adjust
+			
+			case 65: __kb_a = 1; break; //key A: __fov up
+			case 90: __kb_z = 1; break; //key Z: __fov dwn
+			case 81: __demo_mode = !__demo_mode; break; //key Q
 		}
 	});
 	
 	document.addEventListener('keyup', function(event) {
 		switch(event.keyCode) {
-			case 37: kb_left = 0; break;
-			case 38: kb_up = 0; break;
-			case 39: kb_right = 0; break;
-			case 40: kb_down = 0; break;
-			case 65: kb_a = 0; break;
-			case 90: kb_z = 0; break;
+			case 37: __kb_left = 0; break;
+			case 38: __kb_up = 0; break;
+			case 39: __kb_right = 0; break;
+			case 40: __kb_down = 0; break;
+			case 65: __kb_a = 0; break;
+			case 90: __kb_z = 0; break;
+			case 83: __kb_s = 0; break;
+			case 88: __kb_x = 0; break;
 		}
 	});
 }
 
+//TODO: cleanup below
+//###################
+
 function detect_collision(x, y) {
-	var arr_x = Math.floor(x / cellw);
-	var arr_y = Math.floor(y / cellw);
+	var arr_x = Math.floor(x / cell_sz);
+	var arr_y = Math.floor(y / cell_sz);
 	
 	if(arr_x <0 || arr_y <0) //out of bounds
 		return 1;
@@ -107,89 +161,97 @@ function detect_collision(x, y) {
 }
 
 function handle_kb() {
-	if(kb_a)
-		fov += rot_step;
-	if(kb_z)
-		fov -= rot_step;
+	if(__kb_a)
+		__fov += rotation_speed;
+	if(__kb_z)
+		__fov -= rotation_speed;
 	
-	if(kb_left)
-		pa -= rot_step;
-	if(kb_right)
-		pa += rot_step;
+	if(__kb_s)
+		__pupil_dist += __pupil_dist_adjust_speed;
+	if(__kb_x) {
+		__pupil_dist -= __pupil_dist_adjust_speed;
+		
+		if(__pupil_dist<0)
+			__pupil_dist=0;
+	}
 	
-	if(kb_up) {
-		var npx = px + mv_step * Math.cos(pa);
-		var npy = py + mv_step * Math.sin(pa);
+	if(__kb_left)
+		__player_angle -= rotation_speed;
+	if(__kb_right)
+		__player_angle += rotation_speed;
+	
+	if(__kb_up) {
+		var npx = __player_x + movement_step * Math.cos(__player_angle);
+		var npy = __player_y + movement_step * Math.sin(__player_angle);
 		
 		if(!detect_collision(npx, npy)) {
-			px = npx;
-			py = npy;
+			__player_x = npx;
+			__player_y = npy;
 		}
 	}
 	
-	if(kb_down) {
-		var npx = px - mv_step * Math.cos(pa);
-		var npy = py - mv_step * Math.sin(pa);
+	if(__kb_down) {
+		var npx = __player_x - movement_step * Math.cos(__player_angle);
+		var npy = __player_y - movement_step * Math.sin(__player_angle);
 		
 		if(!detect_collision(npx, npy)) {
-			px = npx;
-			py = npy;
+			__player_x = npx;
+			__player_y = npy;
 		}
 	}
 }
 
-function draw_minimap () {
-	var mm_x = c.width - mm_scale*10;
-	var mm_y = c.height - mm_scale*10;
+function draw_minimap (viewport_x, viewport_y, viewport_w, viewport_h) {
+	var mm_x = viewport_x + viewport_w - minimap_sz*__map_w;
+	var mm_y = viewport_y + viewport_h - minimap_sz*__map_h;
 	
-	for(var y=0; y<10; y++)
-		for(var x=0; x<10; x++) {
+	for(var y=0; y<__map_h; y++)
+		for(var x=0; x<__map_w; x++) {
 			if(map[y][x] == "#")
-				ctx.fillStyle = "#000000";
+				__canvas_buffer_context.fillStyle = "#000000";
 			else
-				ctx.fillStyle = "#ffffff";
+				__canvas_buffer_context.fillStyle = "#ffffff";
 			
-			ctx.fillRect(mm_x + x*mm_scale, mm_y + y*mm_scale, mm_scale, mm_scale);
+			__canvas_buffer_context.fillRect(mm_x + x*minimap_sz, mm_y + y*minimap_sz, minimap_sz, minimap_sz);
 		}
 	
-	var mm_px = mm_x + px / (10*cellw) * (10*mm_scale);
-	var mm_py = mm_y + py / (10*cellw) * (10*mm_scale);
+	var mm_px = mm_x + __player_x / (__map_w*cell_sz) * (__map_w*minimap_sz);
+	var mm_py = mm_y + __player_y / (__map_h*cell_sz) * (__map_h*minimap_sz);
 	
 	//draw angle..
-	var mm_pax = mm_scale * Math.cos(pa);
-	var mm_pay = mm_scale * Math.sin(pa);
+	var mm_pax = minimap_sz * Math.cos(__player_angle);
+	var mm_pay = minimap_sz * Math.sin(__player_angle);
 	
-	ctx.strokeStyle="#0000ff";
-	ctx.beginPath();
-	ctx.moveTo(mm_px, mm_py);
-	ctx.lineTo(mm_px + mm_pax, mm_py + mm_pay);
-	ctx.stroke();
+	__canvas_buffer_context.strokeStyle="#0000ff";
+	__canvas_buffer_context.beginPath();
+	__canvas_buffer_context.moveTo(mm_px, mm_py);
+	__canvas_buffer_context.lineTo(mm_px + mm_pax, mm_py + mm_pay);
+	__canvas_buffer_context.stroke();
 	
 	//draw player..
-	ctx.fillStyle = "#ff0000";		
-	ctx.fillRect(mm_px - mm_scale/4, mm_py - mm_scale/4, mm_scale/2, mm_scale/2);
+	__canvas_buffer_context.fillStyle = "#ff0000";		
+	__canvas_buffer_context.fillRect(mm_px - minimap_sz/4, mm_py - minimap_sz/4, minimap_sz/2, minimap_sz/2);
 }
 
-function calc_dist(cell_x, cell_y, ray_a) {
-	var exact_dist=Number.MAX_SAFE_INTEGER, ndist = 0.0;
-	var texture_x = 0;
+function calc_dist(cell_x, cell_y, view_x, view_y, ray_a) {
+	var exact_dist = MAX_INT, ndist = 0.0;
+	var texture_coor = 0;
 	
 	var k = Math.tan(ray_a);
-	var b = py - k * px;
+	var b = view_y - k * view_x;
 	
 	/* a .
 	   . b */
-	var ptax = cell_x * cellw;
-	var ptay = cell_y * cellw;
-	var ptbx = (cell_x+1) * cellw;
-	var ptby = (cell_y+1) * cellw;
+	var ptax = cell_x * cell_sz;
+	var ptay = cell_y * cell_sz;
+	var ptbx = (cell_x+1) * cell_sz;
+	var ptby = (cell_y+1) * cell_sz;
 	
-	//visible ray in front of player: [px, py] => [px + vx*draw_dist, py + vy*draw_dist]
-	var ux1 = px;
-	var uy1 = py;
-	var ux2 = px + Math.cos(ray_a)*draw_dist;
-	var uy2 = py + Math.sin(ray_a)*draw_dist;
-	var tmp;
+	//visible ray in front of player: [__player_x, __player_y] => [__player_x + vx*__draw_dist, __player_y + vy*__draw_dist]
+	var ux1 = view_x;
+	var uy1 = view_y;
+	var ux2 = view_x + Math.cos(ray_a)*__draw_dist;
+	var uy2 = view_y + Math.sin(ray_a)*__draw_dist;
 	
 	if(ux1>ux2) {tmp=ux1; ux1=ux2; ux2=tmp;}
 	if(uy1>uy2) {tmp=uy1; uy1=uy2; uy2=tmp;}
@@ -198,136 +260,151 @@ function calc_dist(cell_x, cell_y, ray_a) {
 	//bottom
 	var fx2 = (ptby - b) / k;
 	if(fx2>=ptax && fx2<=ptbx && fx2>=ux1 && fx2<=ux2 && ptby>=uy1 && ptby<=uy2) {
-		ndist = Math.sqrt((px-fx2)*(px-fx2) + (py-ptby)*(py-ptby));
+		ndist = Math.sqrt((__player_x-fx2)*(__player_x-fx2) + (__player_y-ptby)*(__player_y-ptby));
 		if(ndist < exact_dist) {
 			exact_dist = ndist;
-			texture_x = fx2-ptax;
+			texture_coor = fx2-ptax;
 		}
 	}
 	
 	//left
 	var fy1 = k*ptax + b;
 	if(fy1>=ptay && fy1<=ptby  && ptax>=ux1 && ptax<=ux2 && fy1>=uy1 && fy1<=uy2) {
-		ndist = Math.sqrt((px-ptax)*(px-ptax) + (py-fy1)*(py-fy1));
+		ndist = Math.sqrt((__player_x-ptax)*(__player_x-ptax) + (__player_y-fy1)*(__player_y-fy1));
 		if(ndist<exact_dist) {
 			exact_dist = ndist;
-			texture_x = fy1-ptay;
+			texture_coor = fy1-ptay;
 		}
 	}
 	
 	//top
 	var fx1 = (ptay - b) / k;
 	if(fx1>=ptax && fx1<=ptbx  && fx1>=ux1 && fx1<=ux2 && ptay>=uy1 && ptay<=uy2) {
-		ndist = Math.sqrt((px-fx1)*(px-fx1) + (py-ptay)*(py-ptay));		
+		ndist = Math.sqrt((__player_x-fx1)*(__player_x-fx1) + (__player_y-ptay)*(__player_y-ptay));		
 		if(ndist<exact_dist) {
 			exact_dist = ndist;
-			texture_x = fx1-ptax;
+			texture_coor = fx1-ptax;
 		}
 	}
 	
 	//right
 	var fy2 = k*ptbx + b;
 	if(fy2>=ptay && fy2<=ptby  && ptbx>=ux1 && ptbx<=ux2 && fy2>=uy1 && fy2<=uy2) {
-		ndist = Math.sqrt((px-ptbx)*(px-ptbx) + (py-fy2)*(py-fy2));
+		ndist = Math.sqrt((__player_x-ptbx)*(__player_x-ptbx) + (__player_y-fy2)*(__player_y-fy2));
 		if(ndist<exact_dist) {
 			exact_dist = ndist;
-			texture_x = fy2-ptay;
+			texture_coor = fy2-ptay;
 		}
 	}
 	
-	return {texture_x: texture_x, dist: exact_dist};
+	return {texture_coor: texture_coor, distance: exact_dist};
 }
+
+
+//#######################
+//ok below this point
 
 //checker pattern shader
-function shader(disp_x, texture_x, height) {
+function shader(canvas_x, texture_coor, projected_height) {
 	//attenueate colors according to distance
 	//max = #0000ff
-	var col1 = parseInt(255 * height/c.height).toString(16);
-	if(col1.length < 2) col1 = "0" + col1;
-	var col_hi = "#0000" + col1;
+	var color_channel_1 = parseInt(255 * projected_height/__canvas_buffer.height).toString(16);
+	if(color_channel_1.length < 2) color_channel_1 = "0" + color_channel_1;
+	var color_hi = "#0000" + color_channel_1;
 
 	//max = #7d7dff (aka 125,125,255)
-	var col2 = parseInt(125 * height/c.height).toString(16);
-	if(col2.length < 2) col2 = "0" + col2;
-	var col_lo = "#" + col2 + col2 + col1;
+	var color_channel_2 = parseInt(125 * projected_height/__canvas_buffer.height).toString(16);
+	if(color_channel_2.length < 2) color_channel_2 = "0" + color_channel_2;
+	var color_low = "#" + color_channel_2 + color_channel_2 + color_channel_1;
 	
-	//which col to start?
-	var col_sel = 0;
-	if(Math.floor(texture_x / ( cellw / shader_checkers)) % 2 == 0 ) col_sel = 1;
+	//which color_chosen to start?
+	var color_select = 0;
+	if(Math.floor(texture_coor / ( cell_sz / shader_checker_subdiv)) % 2 == 0 ) color_select = 1;
 
 	//render
-	for(var i=0; i<shader_checkers; i++) {
-		var col = col_hi;
-		if(col_sel) col = col_lo;
+	for(var i=0; i<shader_checker_subdiv; i++) {
+		var color_chosen = color_hi;
+		if(color_select) color_chosen = color_low;
 
 		//draw
-		ctx.fillStyle=col;
-		ctx.fillRect(disp_x, Math.floor((c.height - height) / 2 + i * height / shader_checkers), 1, Math.ceil(height / shader_checkers))
+		__canvas_buffer_context.fillStyle=color_chosen;
+		__canvas_buffer_context.fillRect(canvas_x, Math.floor((__canvas_buffer.height - projected_height) / 2 + i * projected_height / shader_checker_subdiv), 1, Math.ceil(projected_height / shader_checker_subdiv))
 
 		//swap colors
-		col_sel = !col_sel;
+		color_select = !color_select;
 	}
-}
-
-function render_viewport(disp_x, disp_w, vpx, vpy) {
-	for(var i = 0; i<disp_w; i++) {
-		var ray_a = (pa - fov / 2) + (i/disp_w)*fov;
-		
-		var closest_collision = {texture_x: 0, dist: Number.MAX_SAFE_INTEGER};
-				
-		for(var y=0; y<10; y++)
-			for(var x=0; x<10; x++)
-				if(map[y][x] == "#") {
-					var collision_info = calc_dist(x, y, ray_a);
-
-					if(collision_info.dist < closest_collision.dist) {
-						closest_collision.dist = collision_info.dist;
-						closest_collision.texture_x = collision_info.texture_x;
-					}
-				}
-		
-		height = 2 * c.height / closest_collision.dist;
-		
-		if(height > c.height)
-			height = c.height;
-		
-		shader(disp_x + i, closest_collision.texture_x, height);
-	}
-	
-	draw_minimap();
-	
-	//draw fps counter
-	ctx.font = "10px monospace";
-	ctx.fillStyle = "#ff0000"
-	ctx.fillText(fps.toString() + "fps", 5, 590);
-}
-
-function update() {
-	handle_kb();
-	
-	if(auto_spin_mode)
-		pa += Math.PI / 90;
-	
-	ctx.fillStyle=bkg_grad;
-	ctx.fillRect(0,0,c.width,c.height);
-	
-	render_viewport(0, 600, px, py);
-	render_viewport(600, 600, px, py);
-	
-	frame_counter++;
 }
 
 function update_fps_counter() {
-	fps = frame_counter;
-	frame_counter = 0;
+	__fps = __frame_counter;
+	__frame_counter = 0;
+}
+
+function draw_fps_counter(viewport_x, viewport_y, viewport_w, viewport_h) {
+	__canvas_buffer_context.font = "10px monospace";
+	__canvas_buffer_context.fillStyle = "#ff0000"
+	__canvas_buffer_context.fillText(__fps, viewport_x + 5, viewport_y + viewport_h - 10);
+}
+
+function render_viewport(viewport_x, viewport_y, viewport_w, viewport_h, viewport_player_x, viewport_player_y) {
+	for(var i = 0; i<viewport_w; i++) {
+		var ray_a = (__player_angle - __fov / 2) + (i / viewport_w) * __fov;
+		
+		var proximal_collision = {texture_coor: 0, distance: MAX_INT};
+				
+		for(var y=0; y<__map_h; y++)
+			for(var x=0; x<__map_w; x++)
+				if(map[y][x] == "#") {
+					var ncollision = calc_dist(x, y, viewport_player_x, viewport_player_y, ray_a);
+
+					if(ncollision.distance < proximal_collision.distance) {
+						proximal_collision.distance = ncollision.distance;
+						proximal_collision.texture_coor = ncollision.texture_coor;
+					}
+				}
+		
+		var projected_height = 2 * viewport_h / proximal_collision.distance;
+		if(projected_height > viewport_h)
+			projected_height = viewport_h;
+		shader(viewport_x + i, proximal_collision.texture_coor, projected_height);
+	}
+	
+	//draw HUD
+	draw_minimap(viewport_x, viewport_y, viewport_w, viewport_h);
+	draw_fps_counter(viewport_x, viewport_y, viewport_w, viewport_h);
+}
+
+function main_loop() {
+	handle_kb();
+	
+	if(__demo_mode)
+		__player_angle += Math.PI / 135;
+	
+	__canvas_buffer_context.fillStyle=__bkg_grad;
+	__canvas_buffer_context.fillRect(0,0,__canvas_buffer.width,__canvas_buffer.height);
+	
+	//calculate eye position, basically player_pos + eye_unit_vector * scale
+	// -- left eye: (y, -x)
+	var left_eye_x = __player_x + Math.sin(__player_angle) * (__pupil_dist / 2) * __vr_mode;
+	var left_eye_y = __player_y - Math.cos(__player_angle) * (__pupil_dist / 2) * __vr_mode;
+	// -- right eye: (-y, x)
+	var right_eye_x = __player_x - Math.sin(__player_angle) * (__pupil_dist / 2) * __vr_mode;
+	var right_eye_y = __player_y + Math.cos(__player_angle) * (__pupil_dist / 2) * __vr_mode;
+	
+	render_viewport(0, 0, __canvas.height, __canvas.height, left_eye_x, left_eye_y);
+	render_viewport(__canvas.height, 0, __canvas.height, __canvas.height, right_eye_x, right_eye_y);
+	
+	__frame_counter++;
+	
+	//flip buffer
+	__canvas_context.drawImage(__canvas_buffer, 0, 0);
 }
 </script> 
 
 </head>
 
 <body onload="init()" style="background-color:#000000;">
-<canvas id="myCanvas" width="1200" height="600" >
+<canvas id="myCanvas" width="1000" height="500" >
 Your browser does not support the HTML5 canvas tag.</canvas>
 </body>
 </html>
-
