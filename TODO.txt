@@ -1,0 +1,155 @@
+FEATURES
+[V] #01 remove old rendering method and kb bindings
+[V] #03 double viewport
+[ ] #04 code clean up with new naming conventions
+[V] #05 implement iphone accelerometer support
+[ ] #06 wall face culling
+[ ] #07 wall face edge collapse
+[ ] #08 texturing from image file??
+[ ] #09 floor texture?
+[ ] #10 prevent eyes from entering objects (since only px, py is tested) => test both eyes instead!
+[V] #11 display fps
+[V] #12 double buffering (cure motion sickness!)
+[V] #13 determine position from map "o" or directional "AV<>" for starting facing dir
+[ ] #14 super slow rendering mode - can see scan lines
+[ ] #15 Implement scaling in rel to scr size?
+[ ] #16 Implement axis detect (vertical vs horizontal)
+[X] #17 Fwd/bkw according to angular change?
+[V] #18 Initial instructions incl timeout to start if on handheld - wait until in the right position
+[V] #19 Intro for non -accel aka pc, print kb instructions
+[V] #20 tone down the darkening of far objects!
+[ ] #21 wait to remove instructions until held in the right position, fade after 10se thereafter
+[V] #22 use rgba() instead of awkward # notation
+[V] #23 nicer instructions: fade
+[ ] #24 nicer instructions: carboard logo?
+[ ] #25 rendering speed improvement with some kind of polygon rendering?
+[ ] #26 switch instead to BSP trees and projection calculation?
+[ ] #27 implement floor height and wall height?
+[ ] #28 recode in webgl
+
+[ ] #29 test if can fix the tex rect blitting (from hidden canvas pixels??)
+[ ] #30 add buttons below canvas for kb shortcuts
+[ ] #31 new intro with glass drawing (linestrip + filled? circles; for pc = best enjoyed with... for mobile = put on...)
+
+[ ] 3d models - make a lantern
+[ ] lighting?
+
+BUGS
+[ ] #03 some edges have repeat, not tiling pattern - why? (like the "-" in the middle) - probably because the texture is "inverted" due to viewing it from the other side
+[ ] #04 texture is distorted when standing against the wall
+
+
+
+####
+
+VERSION HISTORY
+
+v0.10
+
+
+v0.9
+[V] #18 Initial instructions incl timeout to start if on handheld - wait until in the right position
+[V] #23 nicer instructions: fade
+[V] #22 use rgba() instead of awkward # notation
+
+v0.8
+[V] #05 implement iphone accelerometer support
+[V] #19 Intro for non -accel aka pc, print kb instructions
+[V] #20 tone down the darkening of far objects!
+[X] #17 Fwd/bkw according to angular change?
+
+v0.7
+FEATURES IMPLEMENTED
+[X] #02 spinning viewport with kb binding
+
+BUGS FIXED
+[X] #01 wall disappears when too close; v5 is the last one with working algorithm - so shader's fault somehow?
+[X] #02 annoying horisontal stripe
+
+####
+
+
+textures?
+floor?
+
+double viewport + spinning + iphone
+
+V glitch at right angle??
+bottom glitch??
+
+key for simple raytracing + change ray_steps => f.ex. w and keys s + x
+
+
+
+remove old rendering method and button
+
+//***
+
+return {texture_x: texture_x, dist: dist};
+}
+
+var collision_info = collide ();
+
+if(collision_info.dist < closest_collision.dist) {
+closest_collision.dist = collision_info.dist;
+closest_collision.texture_x = collision_info.texture_x;
+}
+
+height = //TODO - copy
+
+shader(x, closest_collision.texture_x, height, closest_collision.dist);
+
+
+//checker pattern
+var shader_checkers = 6;
+function shader(disp_x, texture_x, height, dist) {
+//attenueate colors according to distance
+//max = #0000ff
+var col1 = //TODO - copy
+var col_hi = "#0000" + col1;
+
+//max = #7d7dff (aka 125,125,255)
+var col2 = //TODO - copy
+var col_lo = "#" + col2 + col2 + col1;
+
+//which col to start?
+var col_sel = 0;
+if(Math.floor(texture_x / ( cell_w / shader_checkers)) % 2 == 0 ) col_sel = 1;
+
+//render
+for(var i=0; i<shader_checkers; i++) {
+var col = col_hi;
+if(col_sel)  col = col_lo;
+
+//draw
+ctx.setFillStyle(col);
+ctx.fillRect(disp_x, (c.height - height) / 2, 1, height / shader_checkers)
+
+//swap colors
+col_sel = !col_sel;
+}
+​}
+
+//******
+//for VR:
+var pd = 4;
+
+//figure out coords for each eye
+//render left viewport
+//render right viewport
+
+
+//TODO: perform culling
+//convert all cells into 4 edges
+//for every cell:
+//for each of 4 neighbors
+//if out of bounds or cell wall - cull edge
+
+//evt.: collapse edges
+//iterative(?).. go through all vertical lines: if neighbours and have same line segment => remove 2, add 1 larger
+//iterative(?).. go through all horisontal lines: if neighbours and have same line segment => remove 2, add 1 larger, continue further
+
+... ...
+... .._
+..# __|
+### 
