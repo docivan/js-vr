@@ -3,6 +3,21 @@
 <head>
 <title>VR maze</title>
 
+<style>
+.button {
+	background-color: #13294c;
+	color: #9ebdef;
+	padding: 5px 5px;
+	text-align: center;
+	text-decoration: none;
+	display: inline-block;
+	font-size: 12px;
+	margin: 4px 2px;
+	border: 2px solid #233f6b;
+	border-radius: 4px;
+}
+</style>
+
 <script>
 
 //map
@@ -76,7 +91,8 @@ var __accel_rot_scaling = 1/50;
 
 //textures
 var __textured = true;
-var __txt_wall;
+//var __txt_wall;
+var __txt_wall_canvas;
 
 const MAX_INT = Number.MAX_SAFE_INTEGER;
 
@@ -97,7 +113,11 @@ function init() {
 	__bkg_grad.addColorStop(0.5,"white");
 	__bkg_grad.addColorStop(1,"black");
 	
-	__txt_wall = document.getElementById("texture_wall");
+	var __txt_wall = document.getElementById("texture_wall");
+	__txt_wall_canvas = document.getElementById("texture_wall_canvas");
+	__txt_wall_canvas.width = __txt_wall.width;
+	__txt_wall_canvas.height = __txt_wall.height;
+	__txt_wall_canvas.getContext('2d').drawImage(__txt_wall, 0, 0);
 	
 	for(var y=0; y<__map_h; y++)
 		for(var x=0; x<__map_w; x++)
@@ -134,15 +154,15 @@ function init() {
 			case 39: __kb_right = 1; break;
 			case 40: __kb_down = 1; break;
 			
-			case 87: __vr_mode = !__vr_mode; break; //key W
+			case 87: btn_toggle_vr_click(); break; //key W
 			case 83: __kb_s = 1; break; //key S: pupil_distance up
 			case 88: __kb_x = 1; break; //key X: pupil_distance dwn
 			
 			case 65: __kb_a = 1; break; //key A: __fov up
 			case 90: __kb_z = 1; break; //key Z: __fov dwn
-			case 81: __demo_mode = !__demo_mode; break; //key Q
+			case 81: btn_toggle_demo_click(); break; //key Q
 			
-			case 69: __textured = !__textured; // key E: __textured on/off
+			case 69: btn_toggle_txt_click(); break; // key E: __textured on/off
 		}
 	});
 	
@@ -162,12 +182,12 @@ function init() {
 	//if running on a device that has accelerometer support
 	//var gyroPresent = false;
 	window.addEventListener("devicemotion", function(e){
-		if(event.rotationRate.alpha || event.rotationRate.beta || event.rotationRate.gamma) {
+		if((!__accel_present) && (event.rotationRate.alpha || event.rotationRate.beta || event.rotationRate.gamma)) {
 			__accel_present = true;
 			//switch demo mode off
-			__demo_mode = 0;
+			btn_toggle_demo_click(0);
 			//switch texturing off - slows down iphone
-			__textured = false;
+			//__textured = false;
 		}
 		
 		/*	horiz, left down = x -9; y +-7
@@ -215,18 +235,14 @@ function detect_collision(x, y) {
 
 function handle_kb() {
 	if(__kb_a)
-		__fov += rotation_speed;
+		btn_adj_fov_click(1);
 	if(__kb_z)
-		__fov -= rotation_speed;
+		btn_adj_fov_click(-1);
 	
 	if(__kb_s)
-		__pupil_dist += __pupil_dist_adjust_speed;
-	if(__kb_x) {
-		__pupil_dist -= __pupil_dist_adjust_speed;
-		
-		if(__pupil_dist<0)
-			__pupil_dist=0;
-	}
+		btn_adj_pd_click(1);
+	if(__kb_x)
+		btn_adj_pd_click(-1);
 	
 	if(__kb_left)
 		__player_angle -= rotation_speed;
@@ -359,15 +375,13 @@ function calc_dist(cell_x, cell_y, view_x, view_y, ray_a) {
 
 //texture shader
 function shader_texture(canvas_x, texture_coor, projected_height) {
-	var texture_x = (__txt_wall.width-1) * texture_coor / cell_sz;
-	__canvas_buffer_context.drawImage(__txt_wall, texture_x, 0, 1, __txt_wall.height, canvas_x, (__canvas_buffer.height - projected_height) / 2, 1, projected_height);
+	var texture_x = (__txt_wall_canvas.width-1) * texture_coor / cell_sz;
+	__canvas_buffer_context.drawImage(__txt_wall_canvas, texture_x, 0, 1, __txt_wall_canvas.height, canvas_x, (__canvas_buffer.height - projected_height) / 2, 1, projected_height);
 	
 	//attenuate texture by rendering a semi-transparent rect over it:
 	var alpha_overlay = 0.5 - 0.5*projected_height/__canvas_buffer.height;
 	__canvas_buffer_context.fillStyle="rgba(0,0,0,"+alpha_overlay+")";
 	__canvas_buffer_context.fillRect(canvas_x, Math.floor((__canvas_buffer.height - projected_height) / 2), 1, projected_height);
-	
-	//TODO try optimization for mobile: create 
 }
 
 //checker pattern shader
@@ -449,33 +463,56 @@ function render_instructions() {
 	if(__intro_timer<0)
 		return;
 	
-	__canvas_buffer_context.font = "18px monospace";
+	var w = __canvas.width;
+	var h = __canvas.height;
+	
+	__canvas_buffer_context.font = "bold 18px monospace";
+	__canvas_buffer_context.lineWidth = 5;
 	
 	//fade
-	if(__intro_timer < __intro_timer_fade)
+	if(__intro_timer < __intro_timer_fade) {
 		__canvas_buffer_context.fillStyle = "rgba(255, 255, 255, "+ (__intro_timer/__intro_timer_fade) + ")";
-	else
-		__canvas_buffer_context.fillStyle = "rgba(255, 255, 255, 1)";
-	
-	//accelerometer?
-	if(__accel_present) {
-		//NB! hvis forkert rotation - ask to put in landscape mode
-		//TODO draw google glass?
-		__canvas_buffer_context.fillText("Put your mobile device into Google Cardboard or similar product", 20, 20);
-		__canvas_buffer_context.fillText("Look around by rotating tour head", 20, 60);
-		__canvas_buffer_context.fillText("Tilt your head forward to walk forward", 20, 80);
-		__canvas_buffer_context.fillText("Tilt your head backwards to walk backwads", 20, 100);
+		__canvas_buffer_context.strokeStyle = "rgba(255, 255, 255, "+ (__intro_timer/__intro_timer_fade) + ")";
 	}
 	else {
-		__canvas_buffer_context.fillText("You appear to be viewing this on a device without accelerometer support", 20, 20);
-		__canvas_buffer_context.fillText("Use the following keyboard controls:", 20, 40);
-		__canvas_buffer_context.fillText("up, down, left right - movement", 20, 80);
-		__canvas_buffer_context.fillText("Q - toggle demo mode on / off", 20, 100);
-		__canvas_buffer_context.fillText("W - toggle VR mode on / off", 20, 120);
-		__canvas_buffer_context.fillText("S/X - adjust interpupillary distance up/down", 20, 140);
-		__canvas_buffer_context.fillText("A/Z - adjust FOV up/down", 20, 160);
-		__canvas_buffer_context.fillText("E - toggle texture on / off", 20, 180);
+		__canvas_buffer_context.fillStyle = "rgba(255, 255, 255, 1)";
+		__canvas_buffer_context.strokeStyle = "rgba(255, 255, 255, 1)";
 	}
+	
+	//draw Google Cardboard icon
+	__canvas_buffer_context.beginPath();
+	__canvas_buffer_context.moveTo(w/2-80, h/2-30);
+	__canvas_buffer_context.lineTo(w/2+80, h/2-30);
+	__canvas_buffer_context.lineTo(w/2+100, h/2-10);
+	__canvas_buffer_context.lineTo(w/2+100, h/2+50);
+	__canvas_buffer_context.lineTo(w/2+80, h/2+70);
+	__canvas_buffer_context.lineTo(w/2+20, h/2+70);
+	__canvas_buffer_context.lineTo(w/2, h/2+50);
+	__canvas_buffer_context.lineTo(w/2-20, h/2+70);
+	__canvas_buffer_context.lineTo(w/2-80, h/2+70);
+	__canvas_buffer_context.lineTo(w/2-100, h/2+50);
+	__canvas_buffer_context.lineTo(w/2-100, h/2-10);
+	__canvas_buffer_context.lineTo(w/2-80, h/2-30);
+	__canvas_buffer_context.stroke();
+	
+	__canvas_buffer_context.beginPath();
+	__canvas_buffer_context.arc(w/2-50,h/2+20,20,0,2*Math.PI);
+	__canvas_buffer_context.fill();
+	
+	__canvas_buffer_context.beginPath();
+	__canvas_buffer_context.arc(w/2+50,h/2+20,20,0,2*Math.PI);
+	__canvas_buffer_context.fill();
+	
+	var intro_text = "";
+	
+	//accelerometer?
+	if(__accel_present)
+		//TODO! hvis forkert rotation - ask to put in landscape mode
+		intro_text = "Time to put your mobile into Google Cardboard!";
+	else
+		intro_text = "Get the full experience on a mobile device using Google Cardboard!";
+	
+	__canvas_buffer_context.fillText(intro_text, (w-__canvas_buffer_context.measureText(intro_text).width)/2, h/2-80);
 	
 	__intro_timer--;
 }
@@ -508,14 +545,104 @@ function main_loop() {
 	//flip buffer
 	__canvas_context.drawImage(__canvas_buffer, 0, 0);
 }
-</script> 
+
+
+//button handling
+
+function btn_toggle_vr_click() {
+	__vr_mode = !__vr_mode;
+	
+	var btn_text = "";
+	
+	if(__vr_mode)
+		btn_text = "Turn VR mode off";
+	else
+		btn_text = "Turn VR mode on";
+	
+	document.getElementById("btn_toggle_vr").value = btn_text;
+}
+
+function btn_adj_pd_click(adj) {
+	if(adj>0)
+		__pupil_dist += __pupil_dist_adjust_speed;
+	if(adj<0) {
+		__pupil_dist -= __pupil_dist_adjust_speed;
+		
+		if(__pupil_dist<0)
+			__pupil_dist=0;
+	}
+	
+	document.getElementById("lbl_adj_pd_val").value = "PD: " + __pupil_dist.toFixed(2);
+}
+
+function btn_adj_fov_click(adj) {
+	if(adj>0) {
+		__fov += rotation_speed;
+		
+		if(__fov>(Math.PI*2))
+			__fov = Math.PI*2;
+	}
+	if(adj<0) {
+		__fov -= rotation_speed;
+		
+		if(__fov<0)
+			__fov=0;
+	}
+	
+	document.getElementById("lbl_adj_fov_val").value = "FOV: " + (180*__fov/Math.PI).toFixed(0);
+}
+
+function btn_toggle_demo_click(val = -1) {
+	switch(val) {
+		case -1: __demo_mode = !__demo_mode; break;
+		case 0: __demo_mode = false; break;
+		default: __demo_mode = true;
+	}
+	
+	if(__demo_mode)
+		btn_text = "Turn demo mode off";
+	else
+		btn_text = "Turn demo mode on";
+	
+	document.getElementById("btn_toggle_demo").value = btn_text;
+}
+
+function btn_toggle_txt_click() {
+	__textured = !__textured;
+	
+	var btn_text = "";
+	
+	if(__textured)
+		btn_text = "Turn textures off";
+	else
+		btn_text = "Turn textures on";
+	
+	document.getElementById("btn_toggle_txt").value = btn_text;
+}
+
+</script>
 
 </head>
 
 <body onload="init()" style="background-color:#000000;">
 <canvas id="myCanvas" width="1000" height="500" >Your browser does not support the HTML5 canvas tag.</canvas>
-<img id="texture_wall" src="brickwork-texture.jpg" style="display:none">
-<!--<canvas id="texture_wall_canvas">Your browser does not support the HTML5 canvas tag.</canvas>-->
+<div>
+
+<input type="button" class="button" id="btn_toggle_vr" onclick="btn_toggle_vr_click()" value="Turn VR mode off">
+<input type="button" class="button" id="btn_toggle_txt" onclick="btn_toggle_txt_click()" value="Turn textures off">
+<input type="button" class="button" id="btn_adj_pd_dn" onclick="btn_adj_pd_click(-1)" value="<">
+<input type="button" class="button" id="lbl_adj_pd_val" value="PD: 1.00" disabled>
+<input type="button" class="button" id="btn_adj_pd_up" onclick="btn_adj_pd_click(1)" value=">">
+<input type="button" class="button" id="btn_adj_fov_dn" onclick="btn_adj_fov_click(-1)" value="<">
+<input type="button" class="button" id="lbl_adj_fov_val" value="FOV: 90" disabled>
+<input type="button" class="button" id="btn_adj_fov_up" onclick="btn_adj_fov_click(1)"  value=">">
+<input type="button" class="button" id="btn_toggle_demo" onclick="btn_toggle_demo_click()" value="Turn demo mode off">
+<div>
+
+<!-- TODO kb shortcuts -->
+
+<img id="texture_wall" src="brickwork-texture.png" style="display:none">
+<canvas id="texture_wall_canvas" width="50" height="50" style="display:none">Your browser does not support the HTML5 canvas tag.</canvas>
 <br><br><br><br><br><br><br> <!-- this is for being able to scroll down to hide iphone safari toolbar-->
 </body>
 </html>
